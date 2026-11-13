@@ -27,7 +27,14 @@ const status=message=>{$("status").textContent=message;$("error").textContent=""
 const error=message=>{$("error").textContent=message;$("status").textContent=""};
 async function api(path,options={}){
  const response=await fetch(path.replace(/^\\//,""),{...options,headers:{"Authorization":"Bearer "+token,"Content-Type":"application/json",...(options.headers||{})}});
- if(!response.ok)throw Error("Request failed ("+response.status+")");
+ if(!response.ok){
+  let detail="";
+  try {
+   const payload=await response.json();
+   if(typeof payload.detail==="string")detail=payload.detail;
+  }catch(_){}
+  throw Error("Request failed ("+response.status+")"+(detail?": "+detail:""));
+ }
  return response.json();
 }
 function filtered(){const q=$("search").value.trim().toLowerCase();return items.filter(c=>(c.name+" "+c.category).toLowerCase().includes(q))}
