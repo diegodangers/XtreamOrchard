@@ -6,4 +6,4 @@ if [ -z "${XTREAM_ORCHARD_ADMIN_TOKEN:-}" ]; then
   echo "Missing XTREAM_ORCHARD_ADMIN_TOKEN; refusing to start" >&2
   exit 1
 fi
-exec /opt/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8099 --proxy-headers=false
+exec /opt/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8099 --no-proxy-headers
