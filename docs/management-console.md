@@ -16,3 +16,13 @@ The app exposes the management console through Home Assistant ingress, with **no
 - Provider URLs using HTTP transmit credentials without TLS. Prefer HTTPS providers.
 
 **Do not install until CI and security validation pass.**
+
+## Home Assistant repository layout
+
+Home Assistant app discovery expects `repository.yaml` at the repository root and the app in `xtream_orchard/`. The root-level app is now the canonical package. The older `homeassistant/` directory is retained temporarily for migration and should not be used for installation.
+
+CI builds `xtream_orchard/` directly and checks the canonical backend source files against the bundled app copy.
+
+## First installation gate
+
+Do not install solely based on Docker success. The first installation must validate Home Assistant repository discovery, the ingress route, authentication, options persistence, and rollback. The developer must also resolve the provider URL/DNS rebinding risk before exposing live credentials.
