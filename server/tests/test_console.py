@@ -7,3 +7,8 @@ def test_console_served():
     assert response.status_code == 200
     assert "XtreamOrchard" in response.text
     assert "Select filtered" in response.text
+
+
+def test_console_uses_ingress_relative_api_urls():
+    html = TestClient(app).get("/").text
+    assert 'path.replace(/^\\//,"")' in html
