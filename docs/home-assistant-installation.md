@@ -22,3 +22,15 @@ Stop and uninstall the test app. Its database resides in the app's /data storage
 - DNS resolution and rebinding protection for provider endpoints
 - Provider credentials stored in Home Assistant options; secrets management review
 - No Android TV device pairing or native Home Assistant integration yet
+
+## Private installation approach (recommended)
+
+Use Home Assistant's **local app directory**, not a GitHub custom repository URL. This keeps the GitHub repository private and requires no public release or GitHub personal access token inside Home Assistant.
+
+For a controlled test, copy the `xtream_orchard/` directory to `/addons/local/xtream_orchard/` on Home Assistant OS using an appropriately authorized SSH or file-access mechanism. The copied directory must contain `config.yaml`, `Dockerfile`, `build.yaml`, `run.sh`, `requirements.txt`, and `app/`. Refresh the Home Assistant app store and look under local apps.
+
+**Do not copy the entire repository** to `/addons/local/`; only the app directory is required. Do not install yet: the app still needs ingress/security review and validation on Home Assistant OS.
+
+When the app is ready for testing, updates will be staged from the private repository into the local app directory. No repository secrets are stored in Home Assistant.
+
+This path assumes Home Assistant OS and sufficient administrator access to the local apps directory. Verify access and a backup before any copy operation.
