@@ -108,8 +108,11 @@ async def refresh_xtream():
             categories = await provider.categories()
             streams = await provider.live_streams()
         items = [Channel(**row) for row in normalize_channels(streams, categories)]
-    except (XtreamError, ValueError) as exc:
-        raise HTTPException(502, "Xtream catalog refresh failed") from None
+    except XtreamError as exc:
+        # Only sanitized, credential-free diagnostics from XtreamClient reach the UI.
+        raise HTTPException(502, str(exc)) from None
+    except ValueError:
+        raise HTTPException(400, "Invalid provider URL or credentials configuration") from None
     return store_channels(items)
 
 
