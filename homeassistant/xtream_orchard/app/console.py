@@ -48,9 +48,9 @@ async function load(){token=$("token").value.trim();if(!token){error("Enter the 
 async function setVisibility(visible){
  if(!selected.size)return;
  try{
-  const ids=[...selected];let updated=0;
-  for(const id of ids){await api("/api/v1/channels/"+encodeURIComponent(id)+"/visibility",{method:"PATCH",body:JSON.stringify({visible})});updated++}
-  items=await api("/api/v1/channels");selected.clear();render();status(updated+" channels updated");
+  const ids=[...selected];
+  const result=await api("/api/v1/channels/visibility",{method:"POST",body:JSON.stringify({ids,visible})});
+  items=await api("/api/v1/channels");selected.clear();render();status(result.updated+" channels updated");
  }catch(e){error("Update interrupted: "+e.message+". Reload to verify changes.")}
 }
 $("load").onclick=load;$("connect").onclick=load;
