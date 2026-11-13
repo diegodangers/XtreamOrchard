@@ -44,12 +44,26 @@ class XtreamClient:
         if action:
             params["action"] = action
         try:
-            response = await self.client.get(
-                self.credentials.base_url.rstrip("/") + "/player_api.php",
-                params=params,
-                timeout=20,
-                follow_redirects=False,
-            )
+            # Some Xtream panels close persistent connections unexpectedly.
+            # Request HTTP/1.1 close semantics and retry one read failure with
+            # a fresh connection. Never log URLs containing credentials.
+            for attempt in range(2):
+                try:
+                    response = await self.client.get(
+                        self.credentials.base_url.rstrip("/") + "/player_api.php",
+                        params=params,
+                        headers={
+                            "Accept": "application/json",
+                            "Connection": "close",
+                            "User-Agent": "Mozilla/5.0 (compatible; XtreamOrchard/0.2)",
+                        },
+                        timeout=20,
+                        follow_redirects=False,
+                    )
+                    break
+                except (httpx.ReadError, httpx.RemoteProtocolError):
+                    if attempt:
+                        raise
             response.raise_for_status()
             result = response.json()
         except httpx.TimeoutException:
