@@ -9,9 +9,11 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from .xtream import XtreamClient, XtreamCredentials, XtreamError, normalize_channels
+from .console import register_console
 
 DB = Path(os.getenv("XTREAM_ORCHARD_DB", "/data/xtream_orchard.db"))
 app = FastAPI(title="XtreamOrchard", version="0.2.0")
+register_console(app)
 
 
 def require_admin(authorization: str | None = Header(default=None)):
