@@ -6,13 +6,16 @@ on:
 jobs:
   pytest:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: server
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: python -m pip install -r requirements.txt pytest
-      - run: python -m pytest -q
+      - run: python -m pip install -r server/requirements.txt pytest
+      - run: PYTHONPATH=server python -m pytest -q server/tests
+      - name: Verify bundled HA app backend matches server
+        run: |
+          diff server/app/main.py homeassistant/xtream_orchard/app/main.py
+          diff server/app/xtream.py homeassistant/xtream_orchard/app/xtream.py
+          diff server/app/console.py homeassistant/xtream_orchard/app/console.py
+          diff server/requirements.txt homeassistant/xtream_orchard/requirements.txt
