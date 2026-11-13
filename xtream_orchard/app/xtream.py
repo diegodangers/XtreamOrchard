@@ -64,8 +64,31 @@ class XtreamClient:
                 except (httpx.ReadError, httpx.RemoteProtocolError):
                     if attempt:
                         raise
+            # Report response metadata only. Never include body, request URL,
+            # Location header, or provider credentials in diagnostics.
+            content_type = response.headers.get("content-type", "").split(";")[0].strip().lower()
+            if response.is_redirect:
+                raise XtreamError(
+                    f"Provider redirected (HTTP {response.status_code}; "
+                    f"content-type {content_type or 'missing'})"
+                )
             response.raise_for_status()
-            result = response.json()
+            try:
+                result = response.json()
+            except ValueError:
+                sample = response.content[:256].lstrip().lower()
+                if sample.startswith((b"<!doctype html", b"<html", b"<head", b"<body")):
+                    kind = "HTML"
+                elif sample.startswith(b"<?xml"):
+                    kind = "XML"
+                elif not response.content:
+                    kind = "empty"
+                else:
+                    kind = "non-JSON"
+                raise XtreamError(
+                    f"Provider returned {kind} response "
+                    f"(HTTP {response.status_code}; content-type {content_type or 'missing'})"
+                ) from None
         except httpx.TimeoutException:
             raise XtreamError("Provider connection timed out") from None
         except httpx.ConnectError:
