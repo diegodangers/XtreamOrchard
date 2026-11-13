@@ -1,8 +1,17 @@
-name: XtreamOrchard (development placeholder)
+name: XtreamOrchard (development preview)
 slug: xtream_orchard
-version: 0.1.0
+description: Development-only IPTV channel catalog management
+version: "0.2.0"
 startup: application
-boot: auto
+boot: manual
 arch:
   - aarch64
-# Not installable yet: app image, ingress, security and runtime wiring pending.
+init: false
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:television-guide
+map:
+  - type: data
+    read_only: false
+# IMPORTANT: This is not ready for installation. Secure ingress-to-API
+# authentication and provider configuration are not yet implemented.
