@@ -26,7 +26,7 @@ const $=id=>document.getElementById(id);
 const status=message=>{$("status").textContent=message;$("error").textContent=""};
 const error=message=>{$("error").textContent=message;$("status").textContent=""};
 async function api(path,options={}){
- const response=await fetch(path,{...options,headers:{"Authorization":"Bearer "+token,"Content-Type":"application/json",...(options.headers||{})}});
+ const response=await fetch(path.replace(/^\\//,""),{...options,headers:{"Authorization":"Bearer "+token,"Content-Type":"application/json",...(options.headers||{})}});
  if(!response.ok)throw Error("Request failed ("+response.status+")");
  return response.json();
 }
