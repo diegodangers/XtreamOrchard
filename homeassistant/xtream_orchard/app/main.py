@@ -56,6 +56,11 @@ class Visibility(BaseModel):
     visible: bool
 
 
+class BulkVisibility(BaseModel):
+    ids: list[str] = Field(min_length=1, max_length=5000)
+    visible: bool
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
@@ -119,6 +124,25 @@ def set_visibility(channel_id: str, payload: Visibility):
             raise HTTPException(404, "Channel not found")
         db.execute("UPDATE revisions SET version=version+1 WHERE id=1")
     return {"id": channel_id, "visible": payload.visible}
+
+
+@app.post("/api/v1/channels/visibility", dependencies=[Depends(require_admin)])
+def set_bulk_visibility(payload: BulkVisibility):
+    """Apply one atomic visibility update; unknown IDs reject the entire batch."""
+    ids = list(dict.fromkeys(payload.ids))
+    with connect() as db:
+        placeholders = ",".join("?" for _ in ids)
+        existing = db.execute(
+            f"SELECT id FROM channels WHERE id IN ({placeholders})", ids
+        ).fetchall()
+        if len(existing) != len(ids):
+            raise HTTPException(404, "One or more channels not found")
+        db.execute(
+            f"UPDATE channels SET visible=? WHERE id IN ({placeholders})",
+            [int(payload.visible), *ids],
+        )
+        db.execute("UPDATE revisions SET version=version+1 WHERE id=1")
+    return {"updated": len(ids), "visible": payload.visible}
 
 
 @app.get("/api/v1/config", dependencies=[Depends(require_admin)])
