@@ -52,8 +52,16 @@ class XtreamClient:
             )
             response.raise_for_status()
             result = response.json()
-        except (httpx.HTTPError, ValueError) as exc:
-            raise XtreamError("Xtream request failed") from None
+        except httpx.TimeoutException:
+            raise XtreamError("Provider connection timed out") from None
+        except httpx.ConnectError:
+            raise XtreamError("Could not connect to provider (DNS, port, or network)") from None
+        except httpx.HTTPStatusError as exc:
+            raise XtreamError(f"Provider returned HTTP {exc.response.status_code}") from None
+        except httpx.HTTPError:
+            raise XtreamError("Provider HTTP transport failed") from None
+        except ValueError:
+            raise XtreamError("Provider returned invalid JSON") from None
         if not isinstance(result, (dict, list)):
             raise XtreamError("Unexpected Xtream response")
         return result
