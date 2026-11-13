@@ -1,0 +1,147 @@
+"""Xtream catalog client. Credentials are never included in exceptions or logs."""
+from dataclasses import dataclass
+from urllib.parse import urlsplit
+import ipaddress
+import httpx
+
+
+class XtreamError(Exception):
+    pass
+
+
+@dataclass(frozen=True)
+class XtreamCredentials:
+    base_url: str
+    username: str
+    password: str
+
+    def __post_init__(self):
+        url = urlsplit(self.base_url)
+        if url.scheme not in ("http", "https") or not url.hostname or url.username or url.password or url.query or url.fragment:
+            raise ValueError("Expected an http(s) Xtream server URL without credentials or query")
+        # Provider hosts must be DNS names or globally routable IPs.
+        # DNS resolution/rebinding protection is still required before deployment.
+        try:
+            address = ipaddress.ip_address(url.hostname)
+        except ValueError:
+            address = None
+        if address is not None and not address.is_global:
+            raise ValueError("Provider address must be public")
+        if not self.username or not self.password:
+            raise ValueError("Username and password are required")
+
+
+class XtreamClient:
+    def __init__(self, credentials: XtreamCredentials, client: httpx.AsyncClient):
+        self.credentials = credentials
+        self.client = client
+
+    async def _request(self, action=None):
+        params = {
+            "username": self.credentials.username,
+            "password": self.credentials.password,
+        }
+        if action:
+            params["action"] = action
+        try:
+            # Some Xtream panels close persistent connections unexpectedly.
+            # Request HTTP/1.1 close semantics and retry one read failure with
+            # a fresh connection. Never log URLs containing credentials.
+            for attempt in range(2):
+                try:
+                    response = await self.client.get(
+                        self.credentials.base_url.rstrip("/") + "/player_api.php",
+                        params=params,
+                        headers={
+                            "Accept": "application/json",
+                            "Connection": "close",
+                            "User-Agent": "Mozilla/5.0 (compatible; XtreamOrchard/0.2)",
+                        },
+                        timeout=20,
+                        follow_redirects=False,
+                    )
+                    break
+                except (httpx.ReadError, httpx.RemoteProtocolError):
+                    if attempt:
+                        raise
+            # Report response metadata only. Never include body, request URL,
+            # Location header, or provider credentials in diagnostics.
+            content_type = response.headers.get("content-type", "").split(";")[0].strip().lower()
+            if response.is_redirect:
+                raise XtreamError(
+                    f"Provider redirected (HTTP {response.status_code}; "
+                    f"content-type {content_type or 'missing'})"
+                )
+            response.raise_for_status()
+            try:
+                result = response.json()
+            except ValueError:
+                sample = response.content[:256].lstrip().lower()
+                if sample.startswith((b"<!doctype html", b"<html", b"<head", b"<body")):
+                    kind = "HTML"
+                elif sample.startswith(b"<?xml"):
+                    kind = "XML"
+                elif not response.content:
+                    kind = "empty"
+                else:
+                    kind = "non-JSON"
+                raise XtreamError(
+                    f"Provider returned {kind} response "
+                    f"(HTTP {response.status_code}; content-type {content_type or 'missing'})"
+                ) from None
+        except httpx.TimeoutException:
+            raise XtreamError("Provider connection timed out") from None
+        except httpx.ConnectError:
+            raise XtreamError("Could not connect to provider (DNS, port, or network)") from None
+        except httpx.HTTPStatusError as exc:
+            raise XtreamError(f"Provider returned HTTP {exc.response.status_code}") from None
+        except httpx.RemoteProtocolError:
+            raise XtreamError("Provider disconnected or sent an invalid HTTP response") from None
+        except httpx.ReadError:
+            raise XtreamError("Provider connection dropped while reading response") from None
+        except httpx.WriteError:
+            raise XtreamError("Provider connection dropped while sending request") from None
+        except httpx.ProxyError:
+            raise XtreamError("Provider proxy connection failed") from None
+        except httpx.HTTPError as exc:
+            # Exception class is safe to expose; exception text can contain
+            # request URLs with provider credentials, so never display it.
+            raise XtreamError(f"Provider transport error: {type(exc).__name__}") from None
+        except ValueError:
+            raise XtreamError("Provider returned invalid JSON") from None
+        if not isinstance(result, (dict, list)):
+            raise XtreamError("Unexpected Xtream response")
+        return result
+
+    async def authenticate(self):
+        result = await self._request()
+        if not isinstance(result, dict) or str(result.get("user_info", {}).get("auth", "0")) != "1":
+            raise XtreamError("Xtream authentication rejected")
+        return {"authenticated": True}
+
+    async def categories(self):
+        result = await self._request("get_live_categories")
+        if not isinstance(result, list):
+            raise XtreamError("Invalid categories response")
+        return result
+
+    async def live_streams(self):
+        result = await self._request("get_live_streams")
+        if not isinstance(result, list):
+            raise XtreamError("Invalid live streams response")
+        return result
+
+
+def normalize_channels(streams, categories):
+    names = {str(c.get("category_id")): str(c.get("category_name", "")) for c in categories}
+    result = []
+    for item in streams:
+        stream_id = item.get("stream_id")
+        if stream_id is None:
+            continue
+        result.append({
+            "id": str(stream_id),
+            "name": str(item.get("name") or f"Channel {stream_id}"),
+            "category": names.get(str(item.get("category_id")), ""),
+        })
+    return result
