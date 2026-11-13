@@ -19,3 +19,13 @@ jobs:
           diff server/app/xtream.py homeassistant/xtream_orchard/app/xtream.py
           diff server/app/console.py homeassistant/xtream_orchard/app/console.py
           diff server/requirements.txt homeassistant/xtream_orchard/requirements.txt
+  addon-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Home Assistant app image
+        run: |
+          docker build \
+            --build-arg BUILD_FROM=ghcr.io/home-assistant/aarch64-base:3.20 \
+            -f homeassistant/xtream_orchard/Dockerfile \
+            homeassistant/xtream_orchard
