@@ -104,13 +104,16 @@ async def refresh_xtream():
         credentials = XtreamCredentials(base, username, password)
         async with httpx.AsyncClient(trust_env=False) as client:
             provider = XtreamClient(credentials, client)
+            stage = "authentication"
             await provider.authenticate()
+            stage = "categories"
             categories = await provider.categories()
+            stage = "live streams"
             streams = await provider.live_streams()
         items = [Channel(**row) for row in normalize_channels(streams, categories)]
     except XtreamError as exc:
-        # Only sanitized, credential-free diagnostics from XtreamClient reach the UI.
-        raise HTTPException(502, str(exc)) from None
+        # Stage is a fixed internal label; XtreamError messages exclude credentials.
+        raise HTTPException(502, f"{stage}: {exc}") from None
     except ValueError:
         raise HTTPException(400, "Invalid provider URL or credentials configuration") from None
     return store_channels(items)
