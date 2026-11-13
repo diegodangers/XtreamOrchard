@@ -64,4 +64,4 @@ $("refresh").onclick=async()=>{try{const result=await api("/api/v1/providers/xtr
 def register_console(app):
     @app.get("/", response_class=HTMLResponse, include_in_schema=False)
     def console():
-        return HTML
+        return HTMLResponse(HTML, headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer"})
