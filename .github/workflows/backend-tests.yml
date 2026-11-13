@@ -27,7 +27,25 @@ jobs:
       - uses: docker/setup-buildx-action@v3
       - name: Build Home Assistant ARM64 app image
         run: |
-          docker buildx build --platform linux/arm64 --progress plain \
+          docker buildx build --platform linux/arm64 --progress plain --load \
+            --tag xtream-orchard:test \
             --build-arg BUILD_FROM=ghcr.io/home-assistant/aarch64-base:3.20 \
             -f homeassistant/xtream_orchard/Dockerfile \
             homeassistant/xtream_orchard
+      - name: Smoke test ARM64 runtime and authentication
+        run: |
+          mkdir -p /tmp/xtream-orchard-data
+          printf '%s' '{"admin_token":"ci-only-token-012345678901234567890123456789","provider_url":"","provider_username":"","provider_password":""}' > /tmp/xtream-orchard-data/options.json
+          docker run -d --name xtream-orchard-test --platform linux/arm64 \
+            -p 127.0.0.1:18099:8099 -v /tmp/xtream-orchard-data:/data \
+            xtream-orchard:test
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:18099/health; then break; fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:18099/health
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18099/api/v1/channels)" = 401
+          curl -fsS -H 'Authorization: Bearer ci-only-token-012345678901234567890123456789' \
+            http://127.0.0.1:18099/api/v1/channels
+          docker logs xtream-orchard-test
+
