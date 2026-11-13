@@ -35,3 +35,21 @@ def test_missing_provider_config(monkeypatch):
     assert client.post("/api/v1/providers/xtream/refresh", headers={
         "Authorization": "Bearer test-secret"
     }).status_code == 503
+
+
+def test_bulk_visibility_is_atomic(monkeypatch, tmp_path):
+    monkeypatch.setattr(main, "DB", tmp_path / "bulk.db")
+    monkeypatch.setenv("XTREAM_ORCHARD_ADMIN_TOKEN", "test-secret")
+    client = TestClient(main.app)
+    headers = {"Authorization": "Bearer test-secret"}
+    client.post("/api/v1/channels/import", headers=headers, json=[
+        {"id": "a", "name": "A"}, {"id": "b", "name": "B"}
+    ])
+    failed = client.post("/api/v1/channels/visibility", headers=headers,
+                         json={"ids": ["a", "missing"], "visible": True})
+    assert failed.status_code == 404
+    assert client.get("/api/v1/config", headers=headers).json()["channels"] == []
+    result = client.post("/api/v1/channels/visibility", headers=headers,
+                         json={"ids": ["a", "b"], "visible": True})
+    assert result.json()["updated"] == 2
+    assert len(client.get("/api/v1/config", headers=headers).json()["channels"]) == 2
