@@ -13,5 +13,14 @@ panel_icon: mdi:television-guide
 map:
   - type: data
     read_only: false
-# IMPORTANT: This is not ready for installation. Secure ingress-to-API
-# authentication and provider configuration are not yet implemented.
+options:
+  admin_token: ""
+  provider_url: ""
+  provider_username: ""
+  provider_password: ""
+schema:
+  admin_token: password
+  provider_url: str?
+  provider_username: str?
+  provider_password: password?
+# Still a development preview. Use a long random admin token.
