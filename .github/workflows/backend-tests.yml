@@ -15,10 +15,12 @@ jobs:
       - run: PYTHONPATH=server python -m pytest -q server/tests
       - name: Verify bundled HA app backend matches server
         run: |
-          diff server/app/main.py homeassistant/xtream_orchard/app/main.py
-          diff server/app/xtream.py homeassistant/xtream_orchard/app/xtream.py
-          diff server/app/console.py homeassistant/xtream_orchard/app/console.py
-          diff server/requirements.txt homeassistant/xtream_orchard/requirements.txt
+          diff server/app/main.py xtream_orchard/app/main.py
+          diff server/app/xtream.py xtream_orchard/app/xtream.py
+          diff server/app/console.py xtream_orchard/app/console.py
+          diff server/requirements.txt xtream_orchard/requirements.txt
+          test -f repository.yaml
+          test -f xtream_orchard/config.yaml
   addon-build:
     runs-on: ubuntu-latest
     steps:
@@ -30,8 +32,8 @@ jobs:
           docker buildx build --platform linux/arm64 --progress plain --load \
             --tag xtream-orchard:test \
             --build-arg BUILD_FROM=ghcr.io/home-assistant/aarch64-base:3.20 \
-            -f homeassistant/xtream_orchard/Dockerfile \
-            homeassistant/xtream_orchard
+            -f xtream_orchard/Dockerfile \
+            xtream_orchard
       - name: Smoke test ARM64 runtime and authentication
         run: |
           mkdir -p /tmp/xtream-orchard-data
