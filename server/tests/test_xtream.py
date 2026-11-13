@@ -32,3 +32,9 @@ def test_rejected_credentials_do_not_leak():
                 await client.authenticate()
             assert "secret" not in str(err.value)
     asyncio.run(run())
+
+
+def test_non_public_provider_ip_rejected():
+    for url in ("http://127.0.0.1:8080", "http://192.168.1.5", "http://169.254.169.254"):
+        with pytest.raises(ValueError, match="public"):
+            XtreamCredentials(url, "user", "secret")
