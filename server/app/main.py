@@ -1,13 +1,25 @@
-"""XtreamOrchard development API; no live provider integration or authentication."""
+"""XtreamOrchard development API with authenticated management endpoints."""
 from pathlib import Path
 import os
+import secrets
 import sqlite3
 
-from fastapi import FastAPI, HTTPException
+import httpx
+from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
+from .xtream import XtreamClient, XtreamCredentials, XtreamError, normalize_channels
+
 DB = Path(os.getenv("XTREAM_ORCHARD_DB", "/data/xtream_orchard.db"))
-app = FastAPI(title="XtreamOrchard", version="0.1.0")
+app = FastAPI(title="XtreamOrchard", version="0.2.0")
+
+
+def require_admin(authorization: str | None = Header(default=None)):
+    expected = os.getenv("XTREAM_ORCHARD_ADMIN_TOKEN", "")
+    if not expected or not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(401, "Unauthorized")
+    if not secrets.compare_digest(authorization[7:], expected):
+        raise HTTPException(401, "Unauthorized")
 
 
 def connect():
@@ -47,7 +59,7 @@ def health():
     return {"status": "ok"}
 
 
-@app.get("/api/v1/channels")
+@app.get("/api/v1/channels", dependencies=[Depends(require_admin)])
 def channels():
     with connect() as db:
         return [dict(row) for row in db.execute(
@@ -55,8 +67,7 @@ def channels():
         )]
 
 
-@app.post("/api/v1/channels/import")
-def import_channels(items: list[Channel]):
+def store_channels(items: list[Channel]):
     with connect() as db:
         for index, item in enumerate(items):
             db.execute(
@@ -70,7 +81,32 @@ def import_channels(items: list[Channel]):
     return {"imported": len(items)}
 
 
-@app.patch("/api/v1/channels/{channel_id}/visibility")
+@app.post("/api/v1/channels/import", dependencies=[Depends(require_admin)])
+def import_channels(items: list[Channel]):
+    return store_channels(items)
+
+
+@app.post("/api/v1/providers/xtream/refresh", dependencies=[Depends(require_admin)])
+async def refresh_xtream():
+    base = os.getenv("XTREAM_ORCHARD_PROVIDER_URL")
+    username = os.getenv("XTREAM_ORCHARD_PROVIDER_USERNAME")
+    password = os.getenv("XTREAM_ORCHARD_PROVIDER_PASSWORD")
+    if not all((base, username, password)):
+        raise HTTPException(503, "Provider not configured")
+    try:
+        credentials = XtreamCredentials(base, username, password)
+        async with httpx.AsyncClient(trust_env=False) as client:
+            provider = XtreamClient(credentials, client)
+            await provider.authenticate()
+            categories = await provider.categories()
+            streams = await provider.live_streams()
+        items = [Channel(**row) for row in normalize_channels(streams, categories)]
+    except (XtreamError, ValueError) as exc:
+        raise HTTPException(502, "Xtream catalog refresh failed") from None
+    return store_channels(items)
+
+
+@app.patch("/api/v1/channels/{channel_id}/visibility", dependencies=[Depends(require_admin)])
 def set_visibility(channel_id: str, payload: Visibility):
     with connect() as db:
         cursor = db.execute(
@@ -83,7 +119,7 @@ def set_visibility(channel_id: str, payload: Visibility):
     return {"id": channel_id, "visible": payload.visible}
 
 
-@app.get("/api/v1/config")
+@app.get("/api/v1/config", dependencies=[Depends(require_admin)])
 def config():
     with connect() as db:
         version = db.execute(
