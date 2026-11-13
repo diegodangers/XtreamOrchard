@@ -1,6 +1,7 @@
 """Xtream catalog client. Credentials are never included in exceptions or logs."""
 from dataclasses import dataclass
 from urllib.parse import urlsplit
+import ipaddress
 import httpx
 
 
@@ -18,6 +19,14 @@ class XtreamCredentials:
         url = urlsplit(self.base_url)
         if url.scheme not in ("http", "https") or not url.hostname or url.username or url.password or url.query or url.fragment:
             raise ValueError("Expected an http(s) Xtream server URL without credentials or query")
+        # Provider hosts must be DNS names or globally routable IPs.
+        # DNS resolution/rebinding protection is still required before deployment.
+        try:
+            address = ipaddress.ip_address(url.hostname)
+        except ValueError:
+            address = None
+        if address is not None and not address.is_global:
+            raise ValueError("Provider address must be public")
         if not self.username or not self.password:
             raise ValueError("Username and password are required")
 
