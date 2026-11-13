@@ -1,0 +1,8 @@
+name: XtreamOrchard (development placeholder)
+slug: xtream_orchard
+version: 0.1.0
+startup: application
+boot: auto
+arch:
+  - aarch64
+# Not installable yet: app image, ingress, security and runtime wiring pending.
