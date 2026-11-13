@@ -1,13 +1,18 @@
-# Management console preview
+# Home Assistant management console (development preview)
 
-The FastAPI server serves a lightweight channel manager at `/`. It supports:
-- Search by channel name/category.
-- Select filtered channels and bulk show/hide.
-- Refresh from a configured Xtream provider.
-- Visible/hidden channel counts.
+The Home Assistant app directory is self-contained and builds from its own Docker context. It includes a snapshot of the backend source and requirements. The CI workflow checks that bundled sources remain in sync with `server/`.
 
-The frontend holds the administrator bearer token in page memory, not localStorage. This is a **development-only** design. Production Home Assistant ingress authentication and TV pairing still need implementation.
+## Configuration
+In the app's Configuration tab, supply a **random administrator token of at least 32 characters** and the Xtream provider URL, username, and password. Credentials are read from the Home Assistant app's options file at startup. Never commit credentials.
 
-The Home Assistant app files are an **unvalidated packaging draft**. The build context must be the repository root (the Dockerfile copies `server/` and `homeassistant/`). No user should install the app until the security and build checks pass.
+The app exposes the management console through Home Assistant ingress, with **no host port mapping**. The browser also requires the administrator bearer token, held in page memory only. Provider credentials are never sent to the browser.
 
-The UI does not yet support group editing, channel ordering, or EPG mapping.
+## Current limitations
+- No tested installation or image build yet.
+- Provider URLs are not hardened against SSRF or DNS rebinding.
+- Home Assistant options are not a dedicated encrypted secrets vault.
+- No channel groups, ordering, EPG mapping, TV pairing, or automatic sync yet.
+- The console currently uses a per-channel sequential bulk visibility API, not a transactional batch endpoint.
+- Provider URLs using HTTP transmit credentials without TLS. Prefer HTTPS providers.
+
+**Do not install until CI and security validation pass.**
