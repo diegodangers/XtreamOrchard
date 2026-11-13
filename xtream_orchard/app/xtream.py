@@ -58,8 +58,18 @@ class XtreamClient:
             raise XtreamError("Could not connect to provider (DNS, port, or network)") from None
         except httpx.HTTPStatusError as exc:
             raise XtreamError(f"Provider returned HTTP {exc.response.status_code}") from None
-        except httpx.HTTPError:
-            raise XtreamError("Provider HTTP transport failed") from None
+        except httpx.RemoteProtocolError:
+            raise XtreamError("Provider disconnected or sent an invalid HTTP response") from None
+        except httpx.ReadError:
+            raise XtreamError("Provider connection dropped while reading response") from None
+        except httpx.WriteError:
+            raise XtreamError("Provider connection dropped while sending request") from None
+        except httpx.ProxyError:
+            raise XtreamError("Provider proxy connection failed") from None
+        except httpx.HTTPError as exc:
+            # Exception class is safe to expose; exception text can contain
+            # request URLs with provider credentials, so never display it.
+            raise XtreamError(f"Provider transport error: {type(exc).__name__}") from None
         except ValueError:
             raise XtreamError("Provider returned invalid JSON") from None
         if not isinstance(result, (dict, list)):
