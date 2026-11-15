@@ -18,21 +18,21 @@ button{background:#294c76;color:white;cursor:pointer}button:disabled{opacity:.45
 .group-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:8px 0}
 .group-actions button{padding:6px 10px;font-size:13px}
 </style></head><body>
-<header><div><h1>XtreamOrchard</h1><small>Channel management • development preview</small></div><button id="connect">Connect</button></header>
+<header><div><h1>XtreamOrchard</h1><small>Channel management • development preview</small></div></header>
 <section class="panel"><p class="muted">Enter the local development API token. It is held in memory only and cleared on refresh. Do not use on an untrusted network.</p>
 <div class="toolbar"><input id="token" type="password" placeholder="API bearer token" autocomplete="off"><button id="load">Load channels</button><button id="refresh">Refresh provider</button></div>
 <p id="status"></p><p id="error" role="alert"></p></section>
 <section class="panel"><div class="toolbar"><input id="search" type="search" placeholder="Search channels or categories"><button id="show">Show selected</button><button id="hide">Hide selected</button><button id="all">Select filtered</button><button id="none">Clear selection</button></div>
 <p id="count" class="muted">Connect to load channels.</p><div id="channels"></div></section>
 <script>
-let token="",items=[],selected=new Set();
+let items=[],selected=new Set();
 const $=id=>document.getElementById(id);
 const status=message=>{$("status").textContent=message;$("error").textContent=""};
 const error=message=>{$("error").textContent=message;$("status").textContent=""};
 async function api(path,options={}){
- const response=await fetch(path.replace(/^\\//,""),{...options,headers:{"Authorization":"Bearer "+token,"Content-Type":"application/json",...(options.headers||{})}});
+ const response=await fetch(path.replace(/^\\//,""),{...options,headers:{"Content-Type":"application/json",...(options.headers||{})}});
  if(!response.ok){
-  if(response.status===401)throw Error("Administrator token rejected. Check that it matches the Home Assistant app configuration.");
+  if(response.status===401)throw Error("Home Assistant ingress authentication failed. Open this app from Home Assistant.");
   let detail="";
   try {
    const payload=await response.json();
@@ -112,8 +112,10 @@ function render(){
   root.append(outer);
  }
 }
-async function load(){token=$("token").value.trim();$("token").value=token;if(!token){error("Enter the API token");return}
- try{items=await api("/api/v1/channels");selected.clear();render();status("Catalog loaded")}catch(e){error(e.message)}}
+async function load(){
+ try{items=await api("/api/v1/channels");selected.clear();render();status("Catalog loaded")}
+ catch(e){error(e.message)}
+}
 async function setVisibility(visible){
  if(!selected.size)return;
  try{
@@ -122,12 +124,12 @@ async function setVisibility(visible){
   items=await api("/api/v1/channels");selected.clear();render();status(result.updated+" channels updated");
  }catch(e){error("Update interrupted: "+e.message+". Reload to verify changes.")}
 }
-$("load").onclick=load;$("connect").onclick=load;
+$("load").onclick=load;
 $("show").onclick=()=>setVisibility(true);$("hide").onclick=()=>setVisibility(false);
 $("search").oninput=render;$("all").onclick=()=>{filtered().forEach(c=>selected.add(c.id));render()};
 $("none").onclick=()=>{selected.clear();render()};
 $("refresh").onclick=async()=>{try{const result=await api("/api/v1/providers/xtream/refresh",{method:"POST"});items=await api("/api/v1/channels");selected.clear();render();status("Imported "+result.imported+" channels")}catch(e){error(e.message)}};
-</script></body></html>"""
+load();\n</script></body></html>"""
 
 
 def register_console(app):
