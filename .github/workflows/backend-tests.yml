@@ -1,0 +1,68 @@
+name: Backend tests
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r server/requirements.txt pytest pyyaml
+      - run: PYTHONPATH=server python -m pytest -q server/tests
+      - name: Verify bundled HA app backend matches server
+        run: |
+          diff server/app/main.py xtream_orchard/app/main.py
+          diff server/app/xtream.py xtream_orchard/app/xtream.py
+          diff server/app/console.py xtream_orchard/app/console.py
+          diff server/requirements.txt xtream_orchard/requirements.txt
+          test -f repository.yaml
+          test -f xtream_orchard/config.yaml
+      - name: Validate Home Assistant app manifest
+        run: |
+          python - <<'PY'
+          import yaml
+          with open('xtream_orchard/config.yaml') as file:
+              config = yaml.safe_load(file)
+          assert 'aarch64' in config['arch']
+          assert config['ingress'] is True
+          assert config['ingress_port'] == 8099
+          assert config['slug'] == 'xtream_orchard'
+          assert 'admin_token' in config['schema']
+          with open('repository.yaml') as file:
+              repo = yaml.safe_load(file)
+          assert repo['name']
+          PY
+  addon-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Build Home Assistant ARM64 app image
+        run: |
+          docker buildx build --platform linux/arm64 --progress plain --load \
+            --tag xtream-orchard:test \
+            --build-arg BUILD_FROM=ghcr.io/home-assistant/aarch64-base:3.20 \
+            -f xtream_orchard/Dockerfile \
+            xtream_orchard
+      - name: Smoke test ARM64 runtime and authentication
+        run: |
+          mkdir -p /tmp/xtream-orchard-data
+          printf '%s' '{"admin_token":"ci-only-token-012345678901234567890123456789","provider_url":"","provider_username":"","provider_password":""}' > /tmp/xtream-orchard-data/options.json
+          docker run -d --name xtream-orchard-test --platform linux/arm64 \
+            -p 127.0.0.1:18099:8099 -v /tmp/xtream-orchard-data:/data \
+            xtream-orchard:test
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:18099/health; then break; fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:18099/health
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18099/api/v1/channels)" = 401
+          curl -fsS -H 'Authorization: Bearer ci-only-token-012345678901234567890123456789' \
+            http://127.0.0.1:18099/api/v1/channels
+          docker logs xtream-orchard-test
+

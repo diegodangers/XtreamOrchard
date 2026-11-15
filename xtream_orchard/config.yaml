@@ -1,0 +1,26 @@
+name: XtreamOrchard (development preview)
+slug: xtream_orchard
+description: Development-only IPTV channel catalog management
+version: "0.2.0"
+startup: application
+boot: manual
+arch:
+  - aarch64
+init: false
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:television-guide
+map:
+  - type: data
+    read_only: false
+options:
+  admin_token: ""
+  provider_url: ""
+  provider_username: ""
+  provider_password: ""
+schema:
+  admin_token: password
+  provider_url: str?
+  provider_username: str?
+  provider_password: password?
+# Still a development preview. Use a long random admin token.
