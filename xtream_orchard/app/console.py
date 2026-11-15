@@ -16,7 +16,7 @@ button{background:#294c76;color:white;cursor:pointer}button:disabled{opacity:.45
 </style></head><body>
 <header><div><h1>XtreamOrchard</h1><small>Channel management • development preview</small></div><button id="connect">Connect</button></header>
 <section class="panel"><p class="muted">Enter the local development API token. It is held in memory only and cleared on refresh. Do not use on an untrusted network.</p>
-<div class="toolbar"><input id="token" type="password" placeholder="API bearer token" autocomplete="off"><button id="copy-token" type="button">Copy token</button><button id="load">Load channels</button><button id="refresh">Refresh provider</button></div>
+<div class="toolbar"><input id="token" type="password" placeholder="API bearer token" autocomplete="off"><button id="load">Load channels</button><button id="refresh">Refresh provider</button></div>
 <p id="status"></p><p id="error" role="alert"></p></section>
 <section class="panel"><div class="toolbar"><input id="search" type="search" placeholder="Search channels or categories"><button id="show">Show selected</button><button id="hide">Hide selected</button><button id="all">Select filtered</button><button id="none">Clear selection</button></div>
 <p id="count" class="muted">Connect to load channels.</p><div id="channels"></div></section>
@@ -61,12 +61,6 @@ async function setVisibility(visible){
   items=await api("/api/v1/channels");selected.clear();render();status(result.updated+" channels updated");
  }catch(e){error("Update interrupted: "+e.message+". Reload to verify changes.")}
 }
-$("copy-token").onclick=async()=>{
- const value=$("token").value.trim();
- if(!value){error("Enter the administrator token before copying");return}
- try{await navigator.clipboard.writeText(value);status("Token copied to clipboard")}
- catch(_){$("token").focus();$("token").select();error("Clipboard unavailable; token selected for manual copying")}
-};
 $("load").onclick=load;$("connect").onclick=load;
 $("show").onclick=()=>setVisibility(true);$("hide").onclick=()=>setVisibility(false);
 $("search").oninput=render;$("all").onclick=()=>{filtered().forEach(c=>selected.add(c.id));render()};
