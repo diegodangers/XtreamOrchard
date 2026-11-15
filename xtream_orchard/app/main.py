@@ -5,7 +5,7 @@ import secrets
 import sqlite3
 
 import httpx
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from .xtream import XtreamClient, XtreamCredentials, XtreamError, normalize_channels
@@ -16,12 +16,20 @@ app = FastAPI(title="XtreamOrchard", version="0.2.0")
 register_console(app)
 
 
-def require_admin(authorization: str | None = Header(default=None)):
+def require_admin(request: Request, authorization: str | None = Header(default=None)):
+    # Home Assistant's ingress proxy authenticates the browser session.
+    # Only the Supervisor proxy's network peer is trusted; forwarded headers
+    # alone are spoofable by other containers.
+    peer = request.client.host if request.client else ""
+    if peer == "172.30.32.2" and request.headers.get("x-hass-source") == "core.ingress":
+        return
+    # Temporary legacy fallback for migration and rollback. Remove only after
+    # ingress-only access has been verified on the actual Home Assistant host.
     expected = os.getenv("XTREAM_ORCHARD_ADMIN_TOKEN", "").strip()
-    if not expected or not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(401, "Unauthorized")
-    if not secrets.compare_digest(authorization[7:].strip(), expected):
-        raise HTTPException(401, "Unauthorized")
+    if expected and authorization and authorization.startswith("Bearer "):
+        if secrets.compare_digest(authorization[7:].strip(), expected):
+            return
+    raise HTTPException(401, "Unauthorized")
 
 
 def connect():
