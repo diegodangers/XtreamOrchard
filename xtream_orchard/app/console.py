@@ -13,6 +13,10 @@ button{background:#294c76;color:white;cursor:pointer}button:disabled{opacity:.45
 .item{border-bottom:1px solid #35404f;padding:12px 0;justify-content:flex-start}
 .item label{flex:1;cursor:pointer}.item input{width:20px;height:20px}.item span{color:#a8b8c9}
 #error{color:#ff9999}#status{color:#b5d5a6}
+.tree-group,.tree-subgroup{border:1px solid #35404f;border-radius:10px;padding:10px;margin:8px 0}
+.tree-subgroup{margin-left:14px}.tree-group summary,.tree-subgroup summary{cursor:pointer;font-weight:600}
+.group-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:8px 0}
+.group-actions button{padding:6px 10px;font-size:13px}
 </style></head><body>
 <header><div><h1>XtreamOrchard</h1><small>Channel management • development preview</small></div><button id="connect">Connect</button></header>
 <section class="panel"><p class="muted">Enter the local development API token. It is held in memory only and cleared on refresh. Do not use on an untrusted network.</p>
@@ -38,17 +42,74 @@ async function api(path,options={}){
  }
  return response.json();
 }
+function splitCategory(value){
+ const raw=String(value||"").trim(),pos=raw.indexOf("|");
+ return pos<0?["Other",raw||"Uncategorized"]:[raw.slice(0,pos).trim()||"Other",raw.slice(pos+1).trim()||"Uncategorized"];
+}
 function filtered(){const q=$("search").value.trim().toLowerCase();return items.filter(c=>(c.name+" "+c.category).toLowerCase().includes(q))}
+function makeButton(text,callback){
+ const b=document.createElement("button");b.type="button";b.textContent=text;b.onclick=callback;return b;
+}
+function makeToggle(label,rows){
+ const wrap=document.createElement("div");wrap.className="group-actions";
+ const visible=rows.filter(c=>c.visible).length;
+ const state=document.createElement("span");state.className="muted";state.textContent=visible===0?"Blocked":visible===rows.length?"Allowed":"Mixed";
+ wrap.append(state,makeButton("Allow all",()=>changeGroup(rows,true,label)),makeButton("Block all",()=>changeGroup(rows,false,label)));
+ return wrap;
+}
+async function changeGroup(rows,visible,label){
+ if(!rows.length)return;
+ const changes=rows.filter(c=>Boolean(c.visible)!==visible);
+ if(!changes.length){status("No changes needed");return}
+ if(!confirm((visible?"Allow ":"Block ")+changes.length+" channels in "+label+"?"))return;
+ try{
+  // Backend accepts at most 5000 IDs per atomic request.
+  for(let i=0;i<changes.length;i+=5000){
+   await api("/api/v1/channels/visibility",{method:"POST",body:JSON.stringify({ids:changes.slice(i,i+5000).map(c=>c.id),visible})});
+  }
+  items=await api("/api/v1/channels");render();status((visible?"Allowed ":"Blocked ")+changes.length+" channels in "+label);
+ }catch(e){error("Update interrupted: "+e.message+". Reload to verify changes.")}
+}
 function render(){
- const rows=filtered();$("count").textContent=items.length+" channels • "+items.filter(c=>c.visible).length+" visible • "+selected.size+" selected";
+ const rows=filtered();
+ $("count").textContent=items.length+" channels • "+items.filter(c=>c.visible).length+" visible • "+selected.size+" selected";
  const root=$("channels");root.replaceChildren();
- for(const channel of rows){
-  const row=document.createElement("div");row.className="item";
-  const check=document.createElement("input");check.type="checkbox";check.checked=selected.has(channel.id);
-  check.addEventListener("change",()=>{check.checked?selected.add(channel.id):selected.delete(channel.id);render()});
-  const label=document.createElement("label");label.textContent=channel.name;
-  const category=document.createElement("span");category.textContent=channel.category+" • "+(channel.visible?"Visible":"Hidden");
-  row.append(check,label,category);root.append(row);
+ const groups=new Map();
+ for(const c of rows){
+  const [group,sub]=splitCategory(c.category);
+  if(!groups.has(group))groups.set(group,new Map());
+  const children=groups.get(group);
+  if(!children.has(sub))children.set(sub,[]);
+  children.get(sub).push(c);
+ }
+ for(const [group,subgroups] of [...groups].sort((a,b)=>a[0].localeCompare(b[0]))){
+  const groupRows=[...subgroups.values()].flat();
+  const outer=document.createElement("details");outer.className="tree-group";
+  const summary=document.createElement("summary");summary.textContent=group+" ("+groupRows.length+")";
+  outer.append(summary,makeToggle(group,groupRows));
+  for(const [sub,channels] of [...subgroups].sort((a,b)=>a[0].localeCompare(b[0]))){
+   const inner=document.createElement("details");inner.className="tree-subgroup";
+   const head=document.createElement("summary");head.textContent=sub+" ("+channels.length+")";
+   inner.append(head,makeToggle(group+" / "+sub,channels));
+   // Only render channel rows when a subgroup is opened; cap visible rows
+   // to keep large catalogs responsive on phones and Home Assistant.
+   const channelRoot=document.createElement("div");
+   const draw=()=>{
+    channelRoot.replaceChildren();
+    if(!inner.open)return;
+    for(const channel of channels.slice(0,250)){
+     const row=document.createElement("div");row.className="item";
+     const check=document.createElement("input");check.type="checkbox";check.checked=selected.has(channel.id);
+     check.addEventListener("change",()=>{check.checked?selected.add(channel.id):selected.delete(channel.id);$("count").textContent=items.length+" channels • "+items.filter(c=>c.visible).length+" visible • "+selected.size+" selected"});
+     const label=document.createElement("label");label.textContent=channel.name;
+     const state=document.createElement("span");state.textContent=channel.visible?"Allowed":"Blocked";
+     row.append(check,label,state);channelRoot.append(row);
+    }
+    if(channels.length>250){const note=document.createElement("p");note.className="muted";note.textContent="Showing first 250 channels. Search to narrow results; group actions affect all "+channels.length+" channels.";channelRoot.append(note)}
+   };
+   inner.addEventListener("toggle",draw);inner.append(channelRoot);outer.append(inner);
+  }
+  root.append(outer);
  }
 }
 async function load(){token=$("token").value.trim();$("token").value=token;if(!token){error("Enter the API token");return}
