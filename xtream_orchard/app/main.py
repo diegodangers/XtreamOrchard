@@ -17,10 +17,10 @@ register_console(app)
 
 
 def require_admin(authorization: str | None = Header(default=None)):
-    expected = os.getenv("XTREAM_ORCHARD_ADMIN_TOKEN", "")
+    expected = os.getenv("XTREAM_ORCHARD_ADMIN_TOKEN", "").strip()
     if not expected or not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(401, "Unauthorized")
-    if not secrets.compare_digest(authorization[7:], expected):
+    if not secrets.compare_digest(authorization[7:].strip(), expected):
         raise HTTPException(401, "Unauthorized")
 
 
